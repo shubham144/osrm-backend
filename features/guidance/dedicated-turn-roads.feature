@@ -611,8 +611,40 @@ Feature: Slipways and Dedicated Turn Lanes
         And the ways
             | nodes | highway | name  |
             | sabc  | primary | sabc  |
-            | dbef  | primary | dbef  |
+            | dbe   | primary | dbe   |
+            | ef    | primary | ef    |
             | ate   | primary | ate   |
+
+       When I route I should get
+            | waypoints | route      | turns                    |
+            | s,f       | sabc,ef,ef | depart,turn right,arrive |
+
+    Scenario: Sliproad tagged as link
+        Given the node map
+            """
+                          d
+                          .
+          s . a . . . . . b . . c
+               `          .
+                `         .
+                 `        .
+                  `       .
+                   `      .
+                    `     .
+                     `    .
+                      `   .
+                       `  .
+                        ` e
+                          .
+                          .
+                          f
+            """
+
+        And the ways
+            | nodes | highway       | name  |
+            | sabc  | motorway      | sabc  |
+            | dbef  | motorway      | dbef  |
+            | ae    | motorway_link | ae    |
 
        When I route I should get
             | waypoints | route          | turns                    |
