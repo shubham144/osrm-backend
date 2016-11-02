@@ -435,7 +435,7 @@ function turn_function(turn)
     turn.duration = normalized_angle * normalized_angle * turn_penalty * turn_bias
   end
 
-  if turn.is_uturn then
+  if turn.direction_modifier == direction_modifier.uturn then
     turn.duration = turn.duration + uturn_penalty
   end
 

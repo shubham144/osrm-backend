@@ -116,7 +116,7 @@ function way_function (way, result)
 end
 
 function turn_function (turn)
-  if turn.is_uturn then
+  if turn.direction_modifier == direction_modifier.uturn then
     turn.duration = uturn_penalty
     turn.weight = uturn_penalty
   end
