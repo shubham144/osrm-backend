@@ -406,6 +406,8 @@ if(ENABLE_MASON)
     set(ENV{CCACHE_CPP2} "true")
   endif()
 
+  include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libosmium/include)
+
 else()
 
   find_package(Boost 1.49.0 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
@@ -456,17 +458,18 @@ else()
     endif()
   endif()
 
+  # note libosmium depends on expat and bzip2
+  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libosmium/cmake")
+  set(OSMIUM_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libosmium/include")
+  find_package(Osmium REQUIRED COMPONENTS io)
+  include_directories(SYSTEM ${OSMIUM_INCLUDE_DIR})
+
 endif()
 
 # even with mason builds we want to link to system zlib
 # to ensure that osrm binaries play well with other binaries like nodejs
 find_package(ZLIB REQUIRED)
 add_dependency_includes(${ZLIB_INCLUDE_DIRS})
-
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libosmium/cmake")
-set(OSMIUM_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libosmium/include")
-find_package(Osmium REQUIRED COMPONENTS io)
-include_directories(SYSTEM ${OSMIUM_INCLUDE_DIR})
 
 if(NOT WIN32 AND NOT Boost_USE_STATIC_LIBS)
   add_dependency_defines(-DBOOST_TEST_DYN_LINK)
