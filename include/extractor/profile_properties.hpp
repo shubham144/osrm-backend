@@ -20,7 +20,7 @@ struct ProfileProperties
     };
 
     ProfileProperties()
-        : traffic_signal_penalty(0), max_speed_for_map_matching(DEFAULT_MAX_SPEED), continue_straight_at_waypoint(true),
+        : max_speed_for_map_matching(DEFAULT_MAX_SPEED), traffic_signal_penalty(0), continue_straight_at_waypoint(true),
         use_turn_restrictions(false), left_hand_driving(false), weight_name{"duration"}
     {
         BOOST_ASSERT(weight_name[MAX_WEIGHT_NAME_LENGTH] == '\0');
@@ -40,9 +40,6 @@ struct ProfileProperties
         max_speed_for_map_matching = max_speed_for_map_matching_;
     }
 
-    //! penalty to do a uturn in deci-seconds
-    double max_speed_for_map_matching;
-
     void SetWeightName(const std::string &name)
     {
         auto count = std::min<std::size_t>(name.length(), MAX_WEIGHT_NAME_LENGTH) + 1;
@@ -59,6 +56,8 @@ struct ProfileProperties
         return std::string(weight_name);
     }
 
+    //! penalty to do a uturn in deci-seconds
+    double max_speed_for_map_matching;
     //! penalty to cross a traffic light in deci-seconds
     std::int32_t traffic_signal_penalty;
     //! depending on the profile, force the routing to always continue in the same direction
