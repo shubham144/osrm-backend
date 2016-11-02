@@ -582,3 +582,38 @@ Feature: Slipways and Dedicated Turn Lanes
        When I route I should get
             | waypoints | route          | turns                                      |
             | s,f       | sabc,dbef,dbef | depart,turn slight right,turn right,arrive |
+
+    Scenario: Traffic Signal on Sliproad
+        Given the node map
+            """
+                          d
+                          .
+          s . a . . . . . b . . c
+               `          .
+                `         .
+                 `        .
+                  t       .
+                   `      .
+                    `     .
+                     `    .
+                      `   .
+                       `  .
+                        ` e
+                          .
+                          .
+                          f
+            """
+
+        And the nodes
+            | node | highway         |
+            | t    | traffic_signals |
+
+        And the ways
+            | nodes | highway | name  |
+            | sabc  | primary | sabc  |
+            | dbef  | primary | dbef  |
+            | ate   | primary | ate   |
+
+       When I route I should get
+            | waypoints | route          | turns                    |
+            | s,f       | sabc,dbef,dbef | depart,turn right,arrive |
