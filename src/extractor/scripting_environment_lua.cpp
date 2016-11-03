@@ -4,6 +4,7 @@
 #include "extractor/extraction_helper_functions.hpp"
 #include "extractor/extraction_node.hpp"
 #include "extractor/extraction_turn.hpp"
+#include "extractor/extraction_segment.hpp"
 #include "extractor/extraction_way.hpp"
 #include "extractor/internal_extractor_edge.hpp"
 #include "extractor/profile_properties.hpp"
@@ -217,6 +218,12 @@ void LuaScriptingEnvironment::InitContext(LuaScriptingContext &context)
          luabind::class_<util::Coordinate>("Coordinate")
              .property("lon", &lonToDouble<util::Coordinate>)
              .property("lat", &latToDouble<util::Coordinate>),
+         luabind::class_<ExtractionSegment>("Segment")
+             .def_readonly("source", &ExtractionSegment::source)
+             .def_readonly("target", &ExtractionSegment::target)
+             .def_readonly("distance", &ExtractionSegment::distance)
+             .def_readwrite("duration", &ExtractionSegment::duration)
+             .def_readwrite("weight", &ExtractionSegment::weight),
          luabind::class_<ExtractionTurn>("Turn")
              .def_readonly("angle", &ExtractionTurn::angle)
              .def_readonly("turn_type", &ExtractionTurn::turn_type)
@@ -414,23 +421,19 @@ void LuaScriptingEnvironment::ProcessTurn(ExtractionTurn &turn)
     }
 }
 
-double LuaScriptingEnvironment::ProcessSegment(const osrm::util::Coordinate &source,
-                                               const osrm::util::Coordinate &target,
-                                               double distance,
-                                               double weight)
+void LuaScriptingEnvironment::ProcessSegment(ExtractionSegment &segment)
 {
     auto &context = GetLuaContext();
+
     if (context.has_segment_function)
     {
         BOOST_ASSERT(context.state != nullptr);
-        weight = luabind::call_function<double>(context.state,
-                                                "segment_function",
-                                                boost::cref(source),
-                                                boost::cref(target),
-                                                distance,
-                                                weight);
+        luabind::call_function<void>(context.state,
+                                       "segment_function",
+                                       boost::ref(segment));
     }
-    return weight;
+
+    return;
 }
 
 void LuaScriptingContext::processNode(const osmium::Node &node, ExtractionNode &result)

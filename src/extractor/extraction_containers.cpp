@@ -1,5 +1,6 @@
 #include "extractor/extraction_containers.hpp"
 #include "extractor/extraction_way.hpp"
+#include "extractor/extraction_segment.hpp"
 
 #include "util/coordinate_calculation.hpp"
 #include "util/range_table.hpp"
@@ -388,14 +389,12 @@ void ExtractionContainers::PrepareEdges(ScriptingEnvironment &scripting_environm
         double duration = static_cast<double>(mapbox::util::apply_visitor(
             detail::ToValueByEdge(distance), edge_iterator->duration_data));
 
-        weight = scripting_environment.ProcessSegment(
-            edge_iterator->source_coordinate, target_coord, distance, weight);
-        duration = scripting_environment.ProcessSegment(
-            edge_iterator->source_coordinate, target_coord, distance, duration);
+        ExtractionSegment extracted_segment(edge_iterator->source_coordinate, target_coord, distance, weight, duration);
+        scripting_environment.ProcessSegment(extracted_segment);
 
         auto &edge = edge_iterator->result;
-        edge.weight = std::max<EdgeWeight>(1, std::round(weight * 10.));
-        edge.duration = std::max<EdgeWeight>(1, std::round(duration * 10.));
+        edge.weight = std::max<EdgeWeight>(1, std::round(extracted_segment.weight * 10.));
+        edge.duration = std::max<EdgeWeight>(1, std::round(extracted_segment.duration * 10.));
 
         // assign new node id
         auto id_iter = external_to_internal_node_id_map.find(node_iterator->node_id);
