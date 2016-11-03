@@ -135,6 +135,8 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         target_road_names.insert(target_data.name_id);
     }
 
+    auto sliproad_found = false;
+
     // Check all roads for Sliproads and assign appropriate TurnType
     for (auto &road : intersection)
     {
@@ -188,6 +190,7 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
             if (node_based_graph.GetTarget(candidate_road.eid) == next->node)
             {
                 road.instruction.type = TurnType::Sliproad;
+                sliproad_found = true;
                 break;
             }
             else
@@ -200,13 +203,17 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
                 {
 
                     road.instruction.type = TurnType::Sliproad;
+                    sliproad_found = true;
                     break;
                 }
             }
         }
     }
 
-    if (next_road.instruction.type == TurnType::Fork)
+    // Now in case we found a Sliproad and assigned the corresponding type to the road,
+    // it could be that the intersection from which the Sliproad splits off was a Fork before.
+    // In those cases the obvious non-Sliproad is now obvious and we discard the Fork turn type.
+    if (sliproad_found && next_road.instruction.type == TurnType::Fork)
     {
         const auto &next_data = node_based_graph.GetEdgeData(next_road.eid);
         if (next_data.name_id == source_edge_data.name_id)
