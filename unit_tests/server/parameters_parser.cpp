@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(invalid_table_urls)
 BOOST_AUTO_TEST_CASE(valid_route_hint)
 {
     auto hint = engine::Hint::FromBase64(
-        "XAYAgP___3-QAAAABAAAACEAAAA_AAAAHgAAAHsFAAAUAAAAaWhxALeCmwI7aHEAy4KbAgUAAQE0h8Z2");
+        "XAYAgP___3-QAAAABAAAACEAAAA_AAAAHgAAAHsFAAAUAAAAaWhxALeCmwI7aHEAy4KbAjtocQDLgpsCAAAAAKCQXlw=");
     BOOST_CHECK_EQUAL(
         hint.phantom.input_location,
         util::Coordinate(util::FloatLongitude{7.432251}, util::FloatLatitude{43.745995}));
