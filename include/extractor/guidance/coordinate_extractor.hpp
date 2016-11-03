@@ -61,9 +61,17 @@ class CoordinateExtractor
      * For calculating the turn angle for the intersection at `a`, we do not care about the turn
      * between `v` and `b`. This calculation trims the coordinates to the ones immediately at the
      * intersection.
+     *
+     * The optional length cache needs to store the accumulated distance up to the respective
+     * coordinate index [0,d(0,1),...]
      */
-    std::vector<util::Coordinate> TrimCoordinatesToLength(std::vector<util::Coordinate> coordinates,
-                                                          const double desired_length) const;
+    std::vector<util::Coordinate>
+    TrimCoordinatesToLength(std::vector<util::Coordinate> coordinates,
+                            const double desired_length,
+                            const std::vector<double> &length_cache = {}) const;
+
+    std::vector<double> PrepareLengthCache(const std::vector<util::Coordinate> &coordinates,
+                                           const double limit) const;
 
     /* when looking at a set of coordinates, this function allows trimming the vector to a smaller,
      * only containing coordinates up to a given distance along the path. The last coordinate might
