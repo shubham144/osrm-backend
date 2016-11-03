@@ -138,29 +138,8 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
     auto sliproad_found = false;
 
     // Check all roads for Sliproads and assign appropriate TurnType
-    for (auto &road : intersection)
+    for (auto &sliproad : intersection)
     {
-        if (!is_potential_link(road))
-            continue;
-
-        EdgeID candidate_in = road.eid;
-
-        const auto target_intersection = [&](NodeID node) {
-            auto intersection = intersection_generator(node, candidate_in);
-            // skip over traffic lights
-            if (intersection.size() == 2)
-            {
-                node = node_based_graph.GetTarget(candidate_in);
-                candidate_in = intersection[1].eid;
-                intersection = intersection_generator(node, candidate_in);
-            }
-            return intersection;
-        }(intersection_node_id);
-
-        // If the sliproad candidate is a through street, we cannot handle it as a sliproad.
-        if (isThroughStreet(road.eid, target_intersection))
-            continue;
-
         // This is what we know so far:
         //
         //       .
@@ -176,8 +155,46 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         //              e
         //
         //
-        //          ^ `road` is `bd`
+        //          ^ `sliproad` is `bd`
         //       ^ `intersection` is intersection at `b`
+
+        if (!is_potential_link(sliproad))
+            continue;
+
+        // b -> d edge id
+        EdgeID sliproad_edge = sliproad.eid;
+
+        const auto target_intersection = [&](NodeID node) {
+            auto intersection = intersection_generator(node, sliproad_edge);
+            // skip over traffic lights
+            if (intersection.size() == 2)
+            {
+                node = node_based_graph.GetTarget(sliproad_edge);
+                sliproad_edge = intersection[1].eid;
+                intersection = intersection_generator(node, sliproad_edge);
+            }
+            return intersection;
+        }(intersection_node_id);
+
+        // If the sliproad candidate is a through street, we cannot handle it as a sliproad.
+        if (isThroughStreet(sliproad_edge, target_intersection))
+            continue;
+
+        // If `sliproad` is tagged as link or ramp it's a Sliproad by definition.
+        const auto &sliproad_data = node_based_graph.GetEdgeData(sliproad_edge);
+
+        const auto is_ramp = sliproad_data.road_classification.IsRampClass();
+        const auto is_link = sliproad_data.road_classification.IsLinkClass();
+
+        if (is_ramp || is_link)
+        {
+            sliproad.instruction.type = TurnType::Sliproad;
+            sliproad_found = true;
+            continue;
+        }
+
+        // Unfortunately, not all (not even the most) Sliproads are tagged link or ramp.
+        // Check all roads at `d` if one is connected to `c`, is so `bd` is Sliproad.
 
         for (const auto &candidate_road : target_intersection)
         {
@@ -189,20 +206,20 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
 
             if (node_based_graph.GetTarget(candidate_road.eid) == next->node)
             {
-                road.instruction.type = TurnType::Sliproad;
+                sliproad.instruction.type = TurnType::Sliproad;
                 sliproad_found = true;
                 break;
             }
             else
             {
                 const auto skip_traffic_light_intersection = intersection_generator(
-                    node_based_graph.GetTarget(candidate_in), candidate_road.eid);
+                    node_based_graph.GetTarget(sliproad_edge), candidate_road.eid);
                 if (skip_traffic_light_intersection.size() == 2 &&
                     node_based_graph.GetTarget(skip_traffic_light_intersection[1].eid) ==
                         next->node)
                 {
 
-                    road.instruction.type = TurnType::Sliproad;
+                    sliproad.instruction.type = TurnType::Sliproad;
                     sliproad_found = true;
                     break;
                 }
