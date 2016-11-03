@@ -84,13 +84,19 @@ inline EdgeWeight distanceAndSpeedToWeight(double distance_in_meters, double spe
 
 // Returns updated edge weight
 template <class IterType>
-EdgeWeight getNewWeight(IterType speed_iter,
+void getNewWeight(IterType speed_iter,
                         const double &segment_length,
                         const std::vector<std::string> &segment_speed_filenames,
                         const EdgeWeight old_weight,
-                        const double log_edge_updates_factor)
+                        const double log_edge_updates_factor,
+                        EdgeWeight &new_segment_weight,
+                        EdgeWeight &new_segment_duration)
 {
-    const auto new_segment_weight =
+    new_segment_weight =
+        (speed_iter->speed_source.weight > 0)
+            ? distanceAndSpeedToWeight(segment_length, speed_iter->speed_source.weight)
+            : INVALID_EDGE_WEIGHT;
+    new_segment_duration =
         (speed_iter->speed_source.speed > 0)
             ? distanceAndSpeedToWeight(segment_length, speed_iter->speed_source.speed)
             : INVALID_EDGE_WEIGHT;
@@ -113,8 +119,6 @@ EdgeWeight getNewWeight(IterType speed_iter,
                 << " based on " << speed_file;
         }
     }
-
-    return new_segment_weight;
 }
 
 int Contractor::Run()
@@ -213,6 +217,7 @@ struct Segment final
 struct SpeedSource final
 {
     unsigned speed;
+    unsigned weight;
     std::uint8_t source;
 };
 
@@ -295,12 +300,12 @@ parse_segment_lookup_from_csv_files(const std::vector<std::string> &segment_spee
 
         SegmentSpeedSourceFlatMap local;
 
-        std::uint64_t from_node_id{};
-        std::uint64_t to_node_id{};
-        unsigned speed{};
-
         for (std::string line; std::getline(segment_speed_file, line);)
         {
+            std::uint64_t from_node_id{};
+            std::uint64_t to_node_id{};
+            unsigned speed{};
+            unsigned weight = INVALID_EDGE_WEIGHT;
             using namespace boost::spirit::qi;
 
             auto it = begin(line);
@@ -310,16 +315,25 @@ parse_segment_lookup_from_csv_files(const std::vector<std::string> &segment_spee
             const auto ok =
                 parse(it,
                       last,                                                                  //
-                      (ulong_long >> ',' >> ulong_long >> ',' >> uint_ >> *(',' >> *char_)), //
+                      (ulong_long >>
+                          ',' >> ulong_long >>
+                          ',' >> uint_ >>
+                          -(',' >> uint_) >>
+                          *(',' >> *char_)), //
                       from_node_id,
                       to_node_id,
-                      speed); //
+                      speed,
+                      weight); //
 
             if (!ok || it != last)
                 throw util::exception{"Segment speed file " + filename + " malformed"};
 
+            std::cout << "HEY, weight is: " << weight << std::endl;
+            if (weight == INVALID_EDGE_WEIGHT)
+                weight = speed;
+
             SegmentSpeedSource val{{OSMNodeID{from_node_id}, OSMNodeID{to_node_id}},
-                                   {speed, static_cast<std::uint8_t>(file_id)}};
+                                   {speed, weight, static_cast<std::uint8_t>(file_id)}};
 
             local.push_back(std::move(val));
         }
@@ -692,21 +706,24 @@ EdgeID Contractor::LoadEdgeExpandedGraph(
                     util::Coordinate{u->lon, u->lat}, util::Coordinate{v->lon, v->lat});
 
                 auto forward_speed_iter = find(
-                    segment_speed_lookup, SegmentSpeedSource{{u->node_id, v->node_id}, {0, 0}});
+                    segment_speed_lookup, SegmentSpeedSource{{u->node_id, v->node_id}, {0, 0, 0}});
                 if (forward_speed_iter != segment_speed_lookup.end())
                 {
-                    const auto new_segment_weight = getNewWeight(forward_speed_iter,
-                                                                 segment_length,
-                                                                 segment_speed_filenames,
-                                                                 current_fwd_duration,
-                                                                 log_edge_updates_factor);
+                    EdgeWeight new_segment_weight, new_segment_duration;
+                    getNewWeight(forward_speed_iter,
+                                 segment_length,
+                                 segment_speed_filenames,
+                                 current_fwd_duration,
+                                 log_edge_updates_factor,
+                                 new_segment_weight,
+                                 new_segment_duration);
 
-                    m_geometry_fwd_duration_list[forward_begin + 1 +
-                                               leaf_object.fwd_segment_position] =
-                        new_segment_weight;
                     m_geometry_fwd_weight_list[forward_begin + 1 +
                                                leaf_object.fwd_segment_position] =
                         new_segment_weight;
+                    m_geometry_fwd_duration_list[forward_begin + 1 +
+                                               leaf_object.fwd_segment_position] =
+                        new_segment_duration;
                     m_geometry_datasource[forward_begin + 1 + leaf_object.fwd_segment_position] =
                         forward_speed_iter->speed_source.source;
 
@@ -723,19 +740,22 @@ EdgeID Contractor::LoadEdgeExpandedGraph(
                     m_geometry_rev_duration_list[forward_begin + leaf_object.fwd_segment_position];
 
                 const auto reverse_speed_iter = find(
-                    segment_speed_lookup, SegmentSpeedSource{{v->node_id, u->node_id}, {0, 0}});
+                    segment_speed_lookup, SegmentSpeedSource{{v->node_id, u->node_id}, {0, 0, 0}});
 
                 if (reverse_speed_iter != segment_speed_lookup.end())
                 {
-                    const auto new_segment_weight = getNewWeight(reverse_speed_iter,
-                                                                 segment_length,
-                                                                 segment_speed_filenames,
-                                                                 current_rev_duration,
-                                                                 log_edge_updates_factor);
+                    EdgeWeight new_segment_weight, new_segment_duration;
+                    getNewWeight(reverse_speed_iter,
+                                 segment_length,
+                                 segment_speed_filenames,
+                                 current_rev_duration,
+                                 log_edge_updates_factor,
+                                 new_segment_weight,
+                                 new_segment_duration);
                     m_geometry_rev_weight_list[forward_begin + leaf_object.fwd_segment_position] =
                         new_segment_weight;
                     m_geometry_rev_duration_list[forward_begin + leaf_object.fwd_segment_position] =
-                        new_segment_weight;
+                        new_segment_duration;
                     m_geometry_datasource[forward_begin + leaf_object.fwd_segment_position] =
                         reverse_speed_iter->speed_source.source;
 
@@ -885,7 +905,7 @@ EdgeID Contractor::LoadEdgeExpandedGraph(
                 auto speed_iter =
                     find(segment_speed_lookup,
                          SegmentSpeedSource{
-                             previous_osm_node_id, segmentblocks[i].this_osm_node_id, {0, 0}});
+                             previous_osm_node_id, segmentblocks[i].this_osm_node_id, {0, 0, 0}});
                 if (speed_iter != segment_speed_lookup.end())
                 {
                     if (speed_iter->speed_source.speed > 0)
