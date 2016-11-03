@@ -189,6 +189,22 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         if (isThroughStreet(sliproad_edge, target_intersection))
             continue;
 
+        // Check for a narrow angle turn onto road `de` the Sliproad adapts to
+        {
+            const auto it = target_intersection.findClosestTurn(STRAIGHT_ANGLE);
+
+            if (it == end(target_intersection))
+                continue;
+
+            const auto onto_angle_deviation = angularDeviation(it->angle, STRAIGHT_ANGLE);
+            const auto is_narrow_onto_turn = onto_angle_deviation <= 2 * NARROW_TURN_ANGLE;
+
+            if (!is_narrow_onto_turn)
+            {
+                continue;
+            }
+        }
+
         // If `sliproad` is tagged as link or ramp it's a Sliproad by definition.
         const auto &sliproad_data = node_based_graph.GetEdgeData(sliproad_edge);
 
