@@ -32,7 +32,9 @@ SliproadHandler::SliproadHandler(const IntersectionGenerator &intersection_gener
                           node_info_list,
                           name_table,
                           street_name_suffix_table,
-                          intersection_generator)
+                          intersection_generator),
+      geojson_lines{"sliproads-lines.geojson", node_info_list},
+      geojson_points{"sliproads-points.geojson", node_info_list}
 {
 }
 
@@ -135,6 +137,11 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         target_road_names.insert(target_data.name_id);
     }
 
+    // TODO: remove geojson debugging
+    NodeID b, c, d;
+    b = intersection_node_id;
+    c = next->node;
+
     auto sliproad_found = false;
 
     // Check all roads for Sliproads and assign appropriate TurnType
@@ -163,6 +170,8 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
 
         // b -> d edge id
         EdgeID sliproad_edge = sliproad.eid;
+
+        d = node_based_graph.GetTarget(sliproad_edge);
 
         const auto target_intersection = [&](NodeID node) {
             auto intersection = intersection_generator(node, sliproad_edge);
@@ -252,6 +261,12 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         {
             intersection[*obvious].instruction.type = TurnType::Suppressed;
         }
+    }
+
+    if (sliproad_found)
+    {
+        geojson_points.Write(std::vector<NodeID>{b, c, d});
+        geojson_lines.Write(std::vector<NodeID>{b, d});
     }
 
     return intersection;
