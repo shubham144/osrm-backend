@@ -1039,6 +1039,9 @@ std::vector<RouteStep> collapseTurns(std::vector<RouteStep> steps)
     // a series of turns is only possible to collapse if its only name changes and suppressed turns.
     const auto canCollapseAll = [&steps](std::size_t index, const std::size_t end_index) {
         BOOST_ASSERT(end_index <= steps.size());
+        if (!compatible(steps[index], steps[index + 1]))
+            return false;
+        ++index;
         for (; index < end_index; ++index)
         {
             if (steps[index].maneuver.instruction.type != TurnType::Suppressed &&
