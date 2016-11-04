@@ -3,6 +3,7 @@
 #include "extractor/guidance/intersection_scenario_three_way.hpp"
 #include "extractor/guidance/toolkit.hpp"
 
+#include "util/coordinate_calculation.hpp"
 #include "util/guidance/toolkit.hpp"
 
 #include <algorithm>
@@ -145,8 +146,10 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
     auto sliproad_found = false;
 
     // Check all roads for Sliproads and assign appropriate TurnType
-    for (auto &sliproad : intersection)
+    for (std::size_t road_index = 0, last = intersection.size(); road_index < last; ++road_index)
     {
+        auto &sliproad = intersection[road_index]; // this is what we're checking and assigning to
+
         // This is what we know so far:
         //
         //       .
@@ -171,6 +174,7 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         // b -> d edge id
         EdgeID sliproad_edge = sliproad.eid;
 
+        // TODO: remove debugging
         d = node_based_graph.GetTarget(sliproad_edge);
 
         const auto target_intersection = [&](NodeID node) {
@@ -189,6 +193,22 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         if (isThroughStreet(sliproad_edge, target_intersection))
             continue;
 
+        // If `sliproad` is tagged as link or ramp it's a Sliproad by definition.
+        const auto &sliproad_data = node_based_graph.GetEdgeData(sliproad_edge);
+
+        const auto is_ramp = sliproad_data.road_classification.IsRampClass();
+        const auto is_link = sliproad_data.road_classification.IsLinkClass();
+
+        if (is_ramp || is_link)
+        {
+            sliproad.instruction.type = TurnType::Sliproad;
+            sliproad_found = true;
+            continue;
+        }
+
+        // Unfortunately, not all (not even the most) Sliproads are tagged link or ramp.
+        // Use some heuristics such as angles, curvature, etc. to classify Sliproads.
+
         // Check for a narrow angle turn onto road `de` the Sliproad adapts to
         {
             const auto it = target_intersection.findClosestTurn(STRAIGHT_ANGLE);
@@ -205,22 +225,56 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
             }
         }
 
-        // If `sliproad` is tagged as link or ramp it's a Sliproad by definition.
-        const auto &sliproad_data = node_based_graph.GetEdgeData(sliproad_edge);
-
-        const auto is_ramp = sliproad_data.road_classification.IsRampClass();
-        const auto is_link = sliproad_data.road_classification.IsLinkClass();
-
-        if (is_ramp || is_link)
+        // Check for curvature. Depending on the turn's direction at `c`. Scenario for right turn:
+        //
+        // a ... b .... c .   a ... b .... c .   a ... b .... c .
+        //       `      .           `  .   .             .    .
+        //         `    .                . .           .      .
+        //           `  .                 ..             .    .
+        //              d                  d                . d
+        //
+        //                    Sliproad           Not a Sliproad
         {
-            sliproad.instruction.type = TurnType::Sliproad;
-            sliproad_found = true;
-            continue;
+            // Intersection is orderd: 0 is UTurn, then from sharp right to sharp left.
+            // We already have an obvious index (bc) for going straight-ish.
+            const auto is_right_turn = road_index < *obvious;
+            const auto is_left_turn = road_index > *obvious;
+
+            const auto &extractor = intersection_generator.GetCoordinateExtractor();
+
+            const NodeID start = intersection_node_id; // b
+            const EdgeID edge = sliproad_edge;         // bd
+
+            const auto coords = extractor.GetForwardCoordinatesAlongRoad(start, edge);
+            BOOST_ASSERT(coordinates.size() >= 2);
+
+            // Now keep start and end coordinate fix and check for curvature
+            const auto start_coord = coords.front();
+            const auto end_coord = coords.back();
+
+            const auto first = std::begin(coords) + 1;
+            const auto last = std::end(coords) - 1;
+
+            auto snuggles = false;
+
+            if (is_right_turn)
+            {
+                snuggles = std::all_of(first, last, [=](auto each) {
+                    return !util::coordinate_calculation::isCCW(start_coord, each, end_coord);
+                });
+            }
+            else if (is_left_turn)
+            {
+                snuggles = std::all_of(first, last, [=](auto each) {
+                    return util::coordinate_calculation::isCCW(start_coord, each, end_coord);
+                });
+            }
+
+            if (!snuggles)
+                continue;
         }
 
-        // Unfortunately, not all (not even the most) Sliproads are tagged link or ramp.
         // Check all roads at `d` if one is connected to `c`, is so `bd` is Sliproad.
-
         for (const auto &candidate_road : target_intersection)
         {
             const auto &candidate_data = node_based_graph.GetEdgeData(candidate_road.eid);
@@ -382,8 +436,8 @@ int SliproadHandler::getLengthToIntersection(const NodeID start, const EdgeID on
 
     using namespace util::coordinate_calculation;
 
-    auto extractor = intersection_generator.GetCoordinateExtractor();
-    auto coordinates = extractor.GetForwardCoordinatesAlongRoad(start, onto);
+    const auto &extractor = intersection_generator.GetCoordinateExtractor();
+    const auto coordinates = extractor.GetForwardCoordinatesAlongRoad(start, onto);
     return getLength(coordinates, &haversineDistance);
 }
 
