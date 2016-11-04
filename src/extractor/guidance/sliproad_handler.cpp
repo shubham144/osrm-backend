@@ -102,7 +102,7 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         auto onto_rounadbout = hasRoundaboutType(road.instruction);
 
         // Narrow turn angle for road (bd) and guard against data issues (overlapping roads)
-        auto is_narrow = angularDeviation(road.angle, STRAIGHT_ANGLE) <= NARROW_TURN_ANGLE;
+        auto is_narrow = angularDeviation(road.angle, STRAIGHT_ANGLE) <= 2 * NARROW_TURN_ANGLE;
         auto not_same_angle =
             angularDeviation(next_road.angle, road.angle) > std::numeric_limits<double>::epsilon();
 
@@ -115,9 +115,10 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         return intersection;
 
     // If the intersection is too far away, don't bother continuing
-    // TODO: needs to take traffic lights on the obvious net road into account.
-    if (getLengthToIntersection(intersection_node_id, next_road.eid) > MAX_SLIPROAD_THRESHOLD)
+    if (nextIntersectionIsTooFarAway(intersection_node_id, next_road.eid))
+    {
         return intersection;
+    }
 
     // Try to find the intersection at (c) which the Sliproad shortcuts
     const auto next = getNextIntersection(intersection_node_id, next_road);
@@ -216,7 +217,7 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
                 continue;
 
             const auto onto_angle_deviation = angularDeviation(it->angle, STRAIGHT_ANGLE);
-            const auto is_narrow_onto_turn = onto_angle_deviation <= NARROW_TURN_ANGLE;
+            const auto is_narrow_onto_turn = onto_angle_deviation <= 2 * NARROW_TURN_ANGLE;
 
             if (!is_narrow_onto_turn)
             {
@@ -428,16 +429,66 @@ boost::optional<std::size_t> SliproadHandler::getObviousIndexWithSliproads(
     return boost::none;
 }
 
-int SliproadHandler::getLengthToIntersection(const NodeID start, const EdgeID onto) const
+bool SliproadHandler::nextIntersectionIsTooFarAway(const NodeID start, const EdgeID onto) const
 {
     BOOST_ASSERT(start != SPECIAL_NODEID);
     BOOST_ASSERT(onto != SPECIAL_EDGEID);
 
-    using namespace util::coordinate_calculation;
-
     const auto &extractor = intersection_generator.GetCoordinateExtractor();
-    const auto coordinates = extractor.GetForwardCoordinatesAlongRoad(start, onto);
-    return getLength(coordinates, &haversineDistance);
+
+    // TODO: refactor, could be useful for other scenarios, too
+
+    struct NextIntersectionDistanceAccumulator
+    {
+        NextIntersectionDistanceAccumulator(
+            const extractor::guidance::CoordinateExtractor &extractor_,
+            const util::NodeBasedDynamicGraph &graph_)
+            : extractor{extractor_}, graph{graph_}, too_far_away{false}, distance{0}
+        {
+        }
+
+        bool terminate()
+        {
+            if (distance > MAX_SLIPROAD_THRESHOLD)
+            {
+                too_far_away = true;
+                return true;
+            }
+
+            return false;
+        }
+
+        void update(const NodeID start, const EdgeID onto, const NodeID)
+        {
+            using namespace util::coordinate_calculation;
+
+            const auto coords = extractor.GetForwardCoordinatesAlongRoad(start, onto);
+            distance += getLength(coords, &haversineDistance);
+        }
+
+        const extractor::guidance::CoordinateExtractor &extractor;
+        const util::NodeBasedDynamicGraph &graph;
+        bool too_far_away;
+        double distance;
+    } accumulator{extractor, node_based_graph};
+
+    struct /*TrafficSignalBarrierRoadSelector*/
+    {
+        boost::optional<EdgeID> operator()(const NodeID,
+                                           const EdgeID,
+                                           const Intersection &intersection,
+                                           const util::NodeBasedDynamicGraph &) const
+        {
+            if (intersection.size() == 2)
+                return boost::make_optional(intersection[1].eid);
+            else
+                return boost::none;
+        }
+    } const selector;
+
+    (void)graph_walker.TraverseRoad(start, onto, accumulator, selector);
+
+    return accumulator.too_far_away;
 }
 
 bool SliproadHandler::isThroughStreet(const EdgeID from, const Intersection &intersection) const

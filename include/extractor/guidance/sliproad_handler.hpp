@@ -66,8 +66,8 @@ class SliproadHandler final : public IntersectionHandler
                                                               const Intersection &intersection,
                                                               const NodeID at) const;
 
-    // Length between intersection starting at `start` and the turn onto `onto`
-    int getLengthToIntersection(const NodeID start, const EdgeID onto) const;
+    // Next intersection from `start` onto `onto` is too far away for a Siproad scenario
+    bool nextIntersectionIsTooFarAway(const NodeID start, const EdgeID onto) const;
 
     // Through street: does a road continue with from's name at the intersection
     bool isThroughStreet(const EdgeID from, const Intersection &intersection) const;
