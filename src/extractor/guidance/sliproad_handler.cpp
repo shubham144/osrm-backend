@@ -101,9 +101,8 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
         auto is_roundabout = node_based_graph.GetEdgeData(road.eid).roundabout;
         auto onto_rounadbout = hasRoundaboutType(road.instruction);
 
-        // Narrow turn angle for road (bd) and guard against data issues (roads on top of each
-        // other)
-        auto is_narrow = angularDeviation(road.angle, STRAIGHT_ANGLE) <= 2 * NARROW_TURN_ANGLE;
+        // Narrow turn angle for road (bd) and guard against data issues (overlapping roads)
+        auto is_narrow = angularDeviation(road.angle, STRAIGHT_ANGLE) <= NARROW_TURN_ANGLE;
         auto not_same_angle =
             angularDeviation(next_road.angle, road.angle) > std::numeric_limits<double>::epsilon();
 
@@ -217,7 +216,7 @@ operator()(const NodeID /*nid*/, const EdgeID source_edge_id, Intersection inter
                 continue;
 
             const auto onto_angle_deviation = angularDeviation(it->angle, STRAIGHT_ANGLE);
-            const auto is_narrow_onto_turn = onto_angle_deviation <= 2 * NARROW_TURN_ANGLE;
+            const auto is_narrow_onto_turn = onto_angle_deviation <= NARROW_TURN_ANGLE;
 
             if (!is_narrow_onto_turn)
             {
